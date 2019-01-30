@@ -1,0 +1,37 @@
+Function DumpTheHiveCases {
+<#
+        .DESCRIPTION
+        Dumps all cases from TheHive.
+
+        .PARAMETER TheHiveUri
+        Specifies the base uri for TheHive server.
+
+        .Parameter TheHiveToken
+        Specifies api key for access to TheHive. 
+
+        .EXAMPLE
+        DumpTheHiveCases -TheHiveUri "http://server.domain.com:9002/api" -TheHiveToken "tH1sIsth3ap1keY/Pr0vid3diNtH3hiV3"
+
+        .NOTES
+        This was created by VI-or-Die.
+
+        .NOTES
+        If case totals are more than 1000 see comment in function.
+    #>
+    param(
+        [Parameter(mandatory=$True)] [string]$TheHiveToken,
+        [Parameter(mandatory=$True)] [string]$TheHiveUri
+    )
+
+
+    # To increase quantity of case output modify range to be "0-x". Where x is the max number of cases to export.
+    [string]$API_Uri = "$TheHiveUri/case/_search?range=0-1000"
+    [string]$API_Method = "Post"
+    $API_headers = @{Authorization = "Bearer $TheHiveToken"}
+    $body = @{
+        query = @{}
+    }
+
+    $JsonBody = $body | ConvertTo-Json -Depth 5 -Compress
+    Invoke-RestMethod -Uri $API_Uri -Headers $API_headers -Body $jsonbody -Method $API_Method -ContentType 'application/json' -Verbose
+}
