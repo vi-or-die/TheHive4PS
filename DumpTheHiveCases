@@ -16,7 +16,7 @@ Function DumpTheHiveCases {
         This was created by VI-or-Die.
 
         .NOTES
-        If case totals are more than 1000 see comment in function.
+        If case totals are more than 10000 see comment in function.
     #>
     param(
         [Parameter(mandatory=$True)] [string]$TheHiveToken,
@@ -25,7 +25,7 @@ Function DumpTheHiveCases {
 
 
     # To increase quantity of case output modify range to be "0-x". Where x is the max number of cases to export.
-    [string]$API_Uri = "$TheHiveUri/case/_search?range=0-1000"
+    [string]$API_Uri = "$TheHiveUri/case/_search?range=0-10000"
     [string]$API_Method = "Post"
     $API_headers = @{Authorization = "Bearer $TheHiveToken"}
     $body = @{
