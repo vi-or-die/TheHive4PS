@@ -1,0 +1,72 @@
+Function Get-HighCasesfromTheHive {
+<#
+        .DESCRIPTION
+        Dumps all High Severity cases from TheHive in the date range provided
+
+        .PARAMETER TheHiveUri
+        Specifies the base uri for TheHive server.
+
+        .Parameter TheHiveToken
+        Specifies api key for access to Hive. 
+
+        .EXAMPLE
+        Get-HighCasesfromTheHive -TheHiveUri "http://server.domain.com:9002/api" -TheHiveToken "tH1sIsth3ap1keY/Pr0vid3diNtH3hiV3" -StartDate "3/1/2019 00:00:00" -EndDate "3/31/2019 00:00:00"
+
+        .NOTES
+        This was created by VI-or-Die.
+
+        .NOTES
+        If case totals are more than 10000 see comment in function.
+    #>
+    param(
+        [Parameter(mandatory=$True)][string]$TheHiveToken,
+        [Parameter(mandatory=$True)][string]$TheHiveUri,
+        [Parameter(mandatory=$True)][DateTime]$StartDate,
+        [Parameter(mandatory=$True)][DateTime]$EndDate
+    )
+
+    # Functions for time conversion
+    function ConvertTo-UnixTimestamp {
+	    param (
+            $Timestamp
+        )
+        $epoch = Get-Date -Year 1970 -Month 1 -Day 1 -Hour 0 -Minute 0 -Second 0	
+ 	    $Timestamp | % {		
+		    $milliSeconds = [math]::truncate($_.ToUniversalTime().Subtract($epoch).TotalMilliSeconds)
+		    Write-Output $milliSeconds
+	    }	
+    }
+    function Convertfrom-UnixTimestamp {
+        param (
+            $Timestamp
+        )
+        $EpochStart = Get-Date -Day 1 -Month 1 -Year 1970
+        $myDateTime = $EpochStart.AddMilliseconds($Timestamp)
+        return $myDateTime.ToUniversalTime()
+    }
+
+
+
+    $StartTimestamp = ConvertTo-UnixTimestamp -Timestamp $StartDate
+    $EndTimestamp = ConvertTo-UnixTimestamp -Timestamp $EndDate
+
+    $StartTimestamp
+    $EndTimestamp
+
+    # To increase quantity of case output modify range to be "0-x". Where x is the max number of cases to export.
+    [string]$API_Uri = "$TheHiveUri/case/_search?range=0-10000"
+    [string]$API_Method = "Post"
+    $API_headers = @{Authorization = "Bearer $TheHiveToken"}
+
+
+    $Body = "" | Select query
+    $Body.query = "" | select _and
+    $Body.query._and = @()
+    $Filter = "" | select _string
+    $Filter._string = "startDate:[ $StartTimestamp TO $EndTimestamp ] AND (severity:3)"
+    $Body.query._and += $Filter
+
+    $JsonBody = $Body | ConvertTo-Json -Depth 5 -Compress
+    Invoke-RestMethod -Uri $API_Uri -Headers $API_headers -Body $jsonbody -Method $API_Method -ContentType 'application/json' -Verbose
+
+}
