@@ -8,7 +8,13 @@ Function Get-HighCasesfromTheHive {
 
         .Parameter TheHiveToken
         Specifies api key for access to Hive. 
-
+	
+	.PARAMETER StartDate
+	Specify the date to begin the search.
+	
+	.PARAMETER EndDate
+	Specify the date to end the search.
+	
         .EXAMPLE
         Get-HighCasesfromTheHive -TheHiveUri "http://server.domain.com:9002/api" -TheHiveToken "tH1sIsth3ap1keY/Pr0vid3diNtH3hiV3" -StartDate "3/1/2019 00:00:00" -EndDate "3/31/2019 00:00:00"
 
