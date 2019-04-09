@@ -1,5 +1,5 @@
 # To configure the script to run properly the following items need to be completed
-# 1. Download the production Web certificate from the MSS portal. Install on the local machine
+# 1. Download the production Web certificate from Symantec MSS portal. Install on the local machine
 # 2. Update the following to reflect the Subject of the certificate previously installed.
 $MSSCert = Get-ChildItem -Path Cert:\LocalMachine\My | where-Object {$_.Subject -like 'O=Company, CN=SII785438, L=City, S=State, C=Country'}
 # 3. Update the following items with the correct URI for TheHive API, and your API key. 
