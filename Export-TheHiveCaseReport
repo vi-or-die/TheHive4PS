@@ -1,0 +1,413 @@
+Function Export-TheHiveCaseReport {
+<#
+        .DESCRIPTION
+        Taking a Case number, find all related information and export a cleanly formatted document.
+
+        .PARAMETER TheHiveUri
+        Specifies the base uri for TheHive server.
+
+        .Parameter TheHiveToken
+        Specifies api key for access to Hive. 
+
+        .CaseNumber
+        Specify the case number of the case to export.
+        
+        .LongFormat
+        Creates an appendix with a page for each observable including any relevant information. 
+        
+        .EXAMPLE
+        Export-TheHiveCaseReport -TheHiveUri "http://server.domain.com:9002/api" -TheHiveToken "tH1sIsth3ap1keY/Pr0vid3diNtH3hiV3" -CaseNumber 1256
+
+        .NOTES
+        This was created by Vi-or-Die.
+
+        .NOTES
+    #>
+    param(
+        [Parameter(mandatory=$True)][string]$TheHiveToken,
+        [Parameter(mandatory=$True)][string]$TheHiveUri,
+        [Parameter(mandatory=$True)][int]$CaseNumber,
+        [Parameter(mandatory=$False)][switch]$LongFormat
+    )
+
+    # Build Case Query 
+    function TheHiveCaseQuery {
+        param (
+            $CaseNumber,
+            $TheHiveToken,
+            $TheHiveUri
+
+        )
+    
+        # Build Case query
+        [string]$Case_Uri = "$TheHiveUri/case/_search"
+        [string]$API_Method = "Post"
+        $API_headers = @{Authorization = "Bearer $TheHiveToken"}
+
+        $CaseQueryBody = "" | select query, range
+        $CaseQueryBody.query = "" | select caseId
+        $CaseQueryBody.query.caseId = $CaseNumber
+        $CaseQueryBody.range = "0-1"
+
+        $CaseQueryBody = $CaseQueryBody | ConvertTo-Json -Depth 20 -Compress
+        $CaseDetails = Invoke-RestMethod -Uri $Case_Uri -Headers $API_headers -Body $CaseQueryBody -Method $API_Method -ContentType 'application/json' -Verbose
+        return $CaseDetails
+    }
+
+    # Build Task List Query 
+    
+    function TheHiveTaskListQuery {
+        param (
+            $CaseID,
+            $TheHiveToken,
+            $TheHiveUri
+        )
+        [string]$API_Method = "Post"
+        $API_headers = @{Authorization = "Bearer $TheHiveToken"}
+        
+        # Build json for Request
+        $TaskQueryBody = "" | select query
+        $TaskQueryBody.query = "" | select _and
+        $TaskQueryBody.query._and = @()
+        $filter = "" | select _and
+        $filter._and = @()
+        $filter2 = "" | select _parent
+        $filter2._parent = "" | select _type, _query
+        $Filter2._parent._type = "case" 
+        $Filter2._parent._query = "" | select _id
+        $Filter2._parent._query._id = "$CaseID"
+        $Filter3 = "" | Select _not
+        $Filter3._not = "" | select status
+        $Filter3._not.status = "Cancel"
+        $Filter._and += $filter2
+        $Filter._and += $Filter3
+        $TaskQueryBody.query._and += $filter
+        
+        # Make call 
+        [string]$TaskList_Uri = "$TheHiveUri/case/task/_search"
+        $TaskQuerypayload = $TaskQueryBody | ConvertTo-Json -Depth 20 -Compress
+        $TaskListDetails = Invoke-RestMethod -Uri $taskList_Uri -Headers $API_headers -Body $TaskQuerypayload -Method $API_Method -ContentType 'application/json' -Verbose
+        return $TaskListDetails
+    }
+
+    # Build Task Log Query
+    function TheHiveTaskLogQuery {
+        param (
+            $TaskID,
+            $TheHiveToken,
+            $TheHiveUri
+        )
+        [string]$API_Method = "Get"
+        $API_headers = @{Authorization = "Bearer $TheHiveToken"}
+        [string]$TaskLog_Uri = "$TheHiveUri/case/task/$TaskID/log"
+
+        $TaskDetails = Invoke-RestMethod -Uri $tasklog_Uri -Headers $API_headers -Method $API_Method -Verbose # Had to remove contentType specification because it didn't work? 
+        return $TaskDetails
+    }
+
+    # Get Observables from a Case
+    function Get-TheHiveCaseObservables {
+        param (
+            $CaseID,
+            $TheHiveToken,
+            $TheHiveUri
+        )
+        [string]$API_Method = "Post"
+        $API_headers = @{Authorization = "Bearer $TheHiveToken"}
+        [string]$Observable_Uri = "$TheHiveUri/case/artifact/_search"
+
+        $CaseObservableQuery = "" | Select query, range
+        $CaseObservableQuery.query = "" | select _parent
+        $CaseObservableQuery.query._parent = "" | select _type, _query
+        $CaseObservableQuery.query._parent._type = "case"
+        $CaseObservableQuery.query._parent._query = "" | select _id
+        $CaseObservableQuery.query._parent._query._id = "$CaseID"
+        $CaseObservableQuery.range = "all"
+        $CaseObservableQuery | ConvertTo-Json -Depth 10 -Compress
+
+        $CaseObservableQueryBody = $CaseObservableQuery | ConvertTo-Json -Depth 20 -Compress
+        $CaseObservables = Invoke-RestMethod -Uri $Observable_Uri -Headers $API_headers -Body $CaseObservableQueryBody -Method $API_Method -ContentType 'application/json' -Verbose
+        return $CaseObservables
+    }
+
+    # Convert Unix Timestamps
+    function Convertfrom-UnixTimestamp {
+    param (
+        $Timestamp
+    )
+    $EpochStart = Get-Date -Day 1 -Month 1 -Year 1970
+    $myDateTime = $EpochStart.AddMilliseconds($Timestamp)
+    return $myDateTime.ToUniversalTime()
+}
+
+
+
+    #### Get Data for REPORT ###
+
+    # Get Case 
+    $CaseData = TheHiveCaseQuery -CaseNumber $CaseNumber -TheHiveToken $TheHiveToken -TheHiveUri $TheHiveUri
+    $CaseID = $CaseData._id
+    
+    # Get List case Tasks
+    $TaskList = TheHiveTaskListQuery -CaseID $CaseID -TheHiveToken $TheHiveToken -TheHiveUri $TheHiveUri
+    
+    # Get Task Log
+    foreach ($Task in $TaskList){
+        
+        
+        $TaskID = $Task._id
+        $Comments = TheHiveTaskLogQuery -TaskID $TaskID -TheHiveToken $TheHiveToken -TheHiveUri $TheHiveUri
+        $Task | Add-Member -MemberType NoteProperty -Name Comments -Value $Comments
+
+    }
+
+    # Get Observables
+    $Observables = Get-TheHiveCaseObservables -CaseID $CaseID -TheHiveToken $TheHiveToken -TheHiveUri $TheHiveUri
+
+
+
+    # Build Master Object
+    $CaseData | Add-Member -Name Observables -Value $Observables -MemberType NoteProperty
+    $CaseData | Add-Member -Name Tasks -Value $TaskList -MemberType NoteProperty
+
+    # Build Word Document
+    $Word = New-Object -ComObject "Word.Application"
+    $Doc = $Word.documents.Add()
+    #$Word.Visible=$True
+    $Selection = $Word.Selection
+
+    # Build Title
+    $Selection.Style="Title"
+    $Selection.TypeText("$($CaseData.title)")
+    $Selection.TypeParagraph()
+    $Selection.InsertNewPage()
+
+    # Build Table of Contents
+    $Range = $Selection.Range
+    $TOC = $Doc.TablesOfContents.Add($Range)
+    $Selection.TypeParagraph()
+    $Selection.InsertNewPage()
+
+    # Build Summary Title
+    $Selection.Style="Heading 1"
+    $Selection.TypeText("Summary")
+    $Selection.TypeParagraph()
+
+    # Case URL 
+    $Selection.Font.Bold=$True
+    $Selection.Font.Size=12
+    $Selection.TypeText("Link to Case: ")
+    $Selection.Hyperlinks.Add($Selection.Range, $Null, "https://hiveapp1.dana.com:9443/index.html#/case/$($CaseData._id)/details") | Out-Null
+    $Selection.TypeText("`n")
+
+    # Case ID
+    $Selection.Font.Bold=$True
+    $Selection.Font.Size=12
+    $Selection.TypeText("Case ID: ")
+    $Selection.Font.Bold=$False
+    $Selection.TypeText("$($CaseData.caseId)`n")
+    
+    # Case Severity
+    $Selection.Font.Bold=$True
+    $Selection.Font.Size=12
+    $Selection.TypeText("Severity: ")
+    $Selection.Font.Bold=$False
+    $Selection.TypeText("$(Switch ($CaseData.severity){ 1 {"Low"} 2 {"Medium"} 3 {"High"}})`n")
+    
+    # Case Status
+    $Selection.Font.Bold=$True
+    $Selection.Font.Size=12
+    $Selection.TypeText("Status: ")
+    $Selection.Font.Bold=$False
+    $Selection.TypeText("$($CaseData.status)`n")
+
+    # Case Status
+    $Selection.Font.Bold=$True
+    $Selection.Font.Size=12
+    $Selection.TypeText("Resolution Status: ")
+    $Selection.Font.Bold=$False
+    $Selection.TypeText("$($CaseData.resolutionStatus)`n")
+
+    # Alert Source
+    $Selection.Font.Bold=$True
+    $Selection.Font.Size=12
+    $Selection.TypeText("Alert Source: ")
+    $Selection.Font.Bold=$False
+    $Selection.TypeText("$($CaseData.source)`n")
+
+    # Alert Start Date
+    $Selection.Font.Bold=$True
+    $Selection.Font.Size=12
+    $Selection.TypeText("Alert Created at: ")
+    $Selection.Font.Bold=$False
+    $Selection.TypeText("$(Convertfrom-UnixTimestamp -Timestamp $CaseData.startDate)`n")
+
+    # Case Start Date
+    $Selection.Font.Bold=$True
+    $Selection.Font.Size=12
+    $Selection.TypeText("Case Created at: ")
+    $Selection.Font.Bold=$False
+    $Selection.TypeText("$(Convertfrom-UnixTimestamp -Timestamp $CaseData.createdAt)`n")
+
+    # Imported by
+    $Selection.Font.Bold=$True
+    $Selection.Font.Size=12
+    $Selection.TypeText("Case Imported by: ")
+    $Selection.Font.Bold=$False
+    $Selection.TypeText("$($CaseData.createdBy)`n")
+    $Selection.TypeParagraph()
+
+    # Case Metrics
+    $Selection.Style="Heading 1"
+    $Selection.TypeText("Metrics")
+    $Selection.TypeParagraph()
+
+    # Case Metric Values
+    $Selection.Font.Bold=$True
+    $Selection.Font.Size=12
+    $Selection.TypeText("Business Unit: ")
+    $Selection.Font.Bold=$False
+    $Selection.TypeText("$($CaseData.customFields.businessUnit.string)`n")
+
+    # Case Metric Values
+    $Selection.Font.Bold=$True
+    $Selection.Font.Size=12
+    $Selection.TypeText("Case Type: ")
+    $Selection.Font.Bold=$False
+    $Selection.TypeText("$($CaseData.customFields.caseType.string)`n")
+
+    # Case Metric Values
+    $Selection.Font.Bold=$True
+    $Selection.Font.Size=12
+    $Selection.TypeText("Detection Method: ")
+    $Selection.Font.Bold=$False
+    $Selection.TypeText("$($CaseData.customFields.detectionMethod.string)`n")
+
+    # Case Metric Values
+    $Selection.Font.Bold=$True
+    $Selection.Font.Size=12
+    $Selection.TypeText("Threat Vector: ")
+    $Selection.Font.Bold=$False
+    $Selection.TypeText("$($CaseData.customFields.initialThreatVector.string)`n")
+    $Selection.InsertNewPage()
+
+    # Case Description
+    $Selection.Style="Heading 1"
+    $Selection.TypeText("Description")
+    $Selection.TypeParagraph()
+    $Selection.TypeText("$(($CaseData.description -replace '### Description','' -replace '### ','').Trim() | Out-String)")
+    $Selection.TypeParagraph()
+    $Selection.InsertNewPage()
+
+    # Task Log
+    $Selection.Style="Heading 1"
+    $Selection.TypeText("Task Log")
+    $Selection.TypeParagraph()
+    
+    foreach ($Group in ($CaseData.Tasks.group | Sort-Object -Unique)){
+        $Selection.Style="Heading 2"
+        $Selection.TypeText("$($Group)")
+        $Selection.TypeParagraph()
+
+        foreach ($item in ($CaseData.Tasks | where-object -Property group -Match "$Group" | Sort-Object -Property order)){
+            $Selection.Style="Heading 3"
+            $Selection.TypeText("$($item.title)")
+            $Selection.TypeParagraph()
+            $Selection.Font.Bold=$True
+            $Selection.TypeText("Status: $($item.status | Out-String)`n")
+            $Selection.Font.Bold=$False
+            
+            foreach ($subitem in ($Item.comments)){
+                $Selection.Font.Bold=$True
+                $Selection.TypeText("------- $(Convertfrom-UnixTimestamp -Timestamp $subitem.startDate) -------`n")
+                $Selection.Font.Bold=$False
+                $Selection.TypeText("$(($subitem.message).Trim() | Out-String)`n")
+            }
+        }
+        $Selection.InsertNewPage()
+    }
+
+    # Observables header
+    $Selection.Style="Heading 1"
+    $Selection.TypeText("Observables")
+    $Selection.TypeParagraph()
+
+    # List IOCs
+    $Selection.Style="Heading 2"
+    $Selection.TypeText("Indicators of Compromise")
+    $Selection.TypeParagraph()
+
+    foreach ($IOC in ($CaseData.Observables | Where-Object -Property ioc -Match true)){
+        $Selection.TypeText("$($IOC.Datatype): $($IOC.data) $(Switch ($IOC.sighted){ True {"**"} false {''}})`n")
+    }
+    $Selection.Font.Bold= $True
+    $Selection.Font.Size=8
+    $Selection.TypeText("`nItems sighted are denoted with **")
+    $Selection.Font.Bold= $False
+    $Selection.TypeParagraph()
+
+    # List non IOCs
+    $Selection.Style="Heading 2"
+    $Selection.TypeText("Additional Observables")
+    $Selection.TypeParagraph()
+
+    foreach ($NonIOC in ($CaseData.Observables | Where-Object -Property ioc -Match false)){
+        $Selection.TypeText("$($NonIOC.Datatype): $($NonIOC.data) $(Switch ($NonIOC.sighted){ True {"**"} false {''}})`n")
+    }
+    $Selection.Font.Bold= $True
+    $Selection.Font.Size=8
+    $Selection.TypeText("`nItems sighted are denoted with **")
+    $Selection.Font.Bold= $False
+    $Selection.TypeParagraph()
+    $Selection.InsertNewPage()
+
+    if ($LongFormat){
+        # Appendix
+        # List non IOCs
+        $Selection.Style="Heading 1"
+        $Selection.TypeText("Appendix: Observable Details")
+        $Selection.TypeParagraph()
+
+    
+        foreach ($Ob in $CaseData.Observables){
+            $Selection.Style="Heading 2"
+            $Selection.TypeText("$($Ob.Data)")
+            $Selection.TypeParagraph()
+
+            # Sighted
+            $Selection.Font.Bold=$True
+            $Selection.TypeText("Sighted: ")
+            $Selection.Font.Bold= $False
+            $Selection.TypeText("$($Ob.sighted)`n")
+        
+            # IOC
+            $Selection.Font.Bold=$True
+            $Selection.TypeText("Indicator of Compromise: ")
+            $Selection.Font.Bold= $False
+            $Selection.TypeText("$($Ob.ioc)`n")
+
+            # Tags
+            $Selection.Font.Bold=$True
+            $Selection.TypeText("Tags: ")
+            $Selection.Font.Bold= $False
+            $Selection.TypeText("$($Ob.tags | out-string)`n")
+
+            # Message
+            $Selection.Font.Bold=$True
+            $Selection.TypeText("Description: `n")
+            $Selection.Font.Bold= $False
+            $Selection.TypeText("$(($Ob.message | out-string).trim())`n")
+
+            $Selection.InsertNewPage()
+        }
+    }
+
+    # Update Table of Contents
+    $Toc.Update()
+
+    # Close and Save Document
+    $Now = Get-Date -Format "yyyyMMddHHmm"
+    $Doc.SaveAs(".\Case$($CaseData.caseId)-Report_$($now).docx")
+    $Doc.Close()
+    $Word.Quit()
+}
