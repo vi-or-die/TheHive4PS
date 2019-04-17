@@ -194,10 +194,11 @@ Function Export-TheHiveCaseReport {
     $Selection.TypeParagraph()
 
     # Case URL 
+    $Hyperlink = $TheHiveUri -replace '/api',"/index.html#/case/$($CaseData._id)/details"
     $Selection.Font.Bold=$True
     $Selection.Font.Size=12
     $Selection.TypeText("Link to Case: ")
-    $Selection.Hyperlinks.Add($Selection.Range, $Null, "https://hiveapp1.dana.com:9443/index.html#/case/$($CaseData._id)/details") | Out-Null
+    $Selection.Hyperlinks.Add($Selection.Range, $Null, "$($Hyperlink)") | Out-Null
     $Selection.TypeText("`n")
 
     # Case ID
