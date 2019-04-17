@@ -9,10 +9,10 @@ Function Export-TheHiveCaseReport {
         .Parameter TheHiveToken
         Specifies api key for access to Hive. 
 
-        .CaseNumber
+        .Parameter CaseNumber
         Specify the case number of the case to export.
         
-        .LongFormat
+        .Parameter LongFormat
         Creates an appendix with a page for each observable including any relevant information. 
         
         .EXAMPLE
@@ -392,6 +392,17 @@ Function Export-TheHiveCaseReport {
             $Selection.TypeText("Tags: ")
             $Selection.Font.Bold= $False
             $Selection.TypeText("$($Ob.tags | out-string)`n")
+
+            # Print Mini Reports
+            $Reports = $Ob.reports.psobject.Properties | Where-Object -Property MemberType -Match "NoteProperty"
+            foreach ($Report in $Reports){
+                if ($Report.Value.taxonomies.namespace){
+                    $Selection.Font.Bold=$True
+                    $Selection.TypeText("$($Report.Name)`n")
+                    $Selection.Font.Bold= $False
+                    $Selection.TypeText("$($Report.value.taxonomies.namespace)-$($Report.value.taxonomies.predicate):  $($Report.value.taxonomies.value) (Level: $($Report.value.taxonomies.level))`n")
+                }
+            }
 
             # Message
             $Selection.Font.Bold=$True
