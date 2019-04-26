@@ -99,7 +99,7 @@ Function Export-TheHiveCaseReport {
         )
         [string]$API_Method = "Get"
         $API_headers = @{Authorization = "Bearer $TheHiveToken"}
-        [string]$TaskLog_Uri = "$TheHiveUri/case/task/$TaskID/log"
+        [string]$TaskLog_Uri = "$TheHiveUri/case/task/$TaskID/log?range=0-1000&sort=startDate"
 
         $TaskDetails = Invoke-RestMethod -Uri $tasklog_Uri -Headers $API_headers -Method $API_Method -Verbose # Had to remove contentType specification because it didn't work? 
         return $TaskDetails
@@ -114,7 +114,7 @@ Function Export-TheHiveCaseReport {
         )
         [string]$API_Method = "Post"
         $API_headers = @{Authorization = "Bearer $TheHiveToken"}
-        [string]$Observable_Uri = "$TheHiveUri/case/artifact/_search"
+        [string]$Observable_Uri = "$TheHiveUri/case/artifact/_search?range=0-1000"
 
         $CaseObservableQuery = "" | Select query, range
         $CaseObservableQuery.query = "" | select _parent
