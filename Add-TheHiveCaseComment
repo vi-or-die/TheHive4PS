@@ -1,0 +1,116 @@
+Function Add-TheHiveCaseComment {
+<#
+        .DESCRIPTION
+        Adds a comment to a case in TheHive.
+
+        .PARAMETER TheHiveUri
+        Specifies the base uri for TheHive server.
+
+        .Parameter TheHiveToken
+        Specifies api key for access to Hive. 
+
+        .Parameter CaseNumber
+        Specify the case number that is seen in TheHive.
+
+        .Parameter TaskName
+        Specify the Task Name you wish to update
+
+        .Parameter Comment
+        Specify the data you wish to add in a comment
+
+        .EXAMPLE
+        Add-TheHiveCaseComment -TheHiveUri "http://server.domain.com:9002/api" -TheHiveToken "tH1sIsth3ap1keY/Pr0vid3diNtH3hiV3" -CaseNumber 1234 -TaskName "Containment" -Comment "This is a new sentance.`n`nThis is a new line"
+
+        .NOTES
+        This was created by VI-or-Die.
+
+        .NOTES
+        If case totals are more than 10000 see comment in function.
+#>
+    param(
+        [Parameter(mandatory=$True)] [string]$TheHiveToken,
+        [Parameter(mandatory=$True)] [string]$TheHiveUri,
+        [Parameter(mandatory=$True)] [string]$CaseNumber,
+        [Parameter(mandatory=$True)] [string]$TaskName,
+        [Parameter(mandatory=$True)] [string]$Comment
+    )
+    function TheHiveCaseQuery {
+        param (
+            $CaseNumber,
+            $TheHiveToken,
+            $TheHiveUri
+
+        )
+
+        # Build Case query
+        [string]$Case_Uri = "$TheHiveUri/case/_search"
+        [string]$API_Method = "Post"
+        $API_headers = @{Authorization = "Bearer $TheHiveToken"}
+
+        $CaseQueryBody = "" | select query, range
+        $CaseQueryBody.query = "" | select caseId
+        $CaseQueryBody.query.caseId = $CaseNumber
+        $CaseQueryBody.range = "0-1"
+
+        $CaseQueryBody = $CaseQueryBody | ConvertTo-Json -Depth 20 -Compress
+        $CaseDetails = Invoke-RestMethod -Uri $Case_Uri -Headers $API_headers -Body $CaseQueryBody -Method $API_Method -ContentType 'application/json' -Verbose
+        return $CaseDetails
+    }
+    function TheHiveTaskListQuery {
+        param (
+            $CaseID,
+            $TheHiveToken,
+            $TheHiveUri
+        )
+        [string]$API_Method = "Post"
+        $API_headers = @{Authorization = "Bearer $TheHiveToken"}
+
+        # Build json for Request
+        $TaskQueryBody = "" | select query
+        $TaskQueryBody.query = "" | select _and
+        $TaskQueryBody.query._and = @()
+        $filter = "" | select _and
+        $filter._and = @()
+        $filter2 = "" | select _parent
+        $filter2._parent = "" | select _type, _query
+        $Filter2._parent._type = "case"
+        $Filter2._parent._query = "" | select _id
+        $Filter2._parent._query._id = "$CaseID"
+        $Filter3 = "" | Select _not
+        $Filter3._not = "" | select status
+        $Filter3._not.status = "Cancel"
+        $Filter._and += $filter2
+        $Filter._and += $Filter3
+        $TaskQueryBody.query._and += $filter
+
+        # Make call
+        [string]$TaskList_Uri = "$TheHiveUri/case/task/_search"
+        $TaskQuerypayload = $TaskQueryBody | ConvertTo-Json -Depth 20 -Compress
+        $TaskListDetails = Invoke-RestMethod -Uri $taskList_Uri -Headers $API_headers -Body $TaskQuerypayload -Method $API_Method -ContentType 'application/json' -Verbose
+        return $TaskListDetails
+    }
+    function TheHiveCreateTaskLog {
+        param (
+            $TaskID,
+            $TheHiveToken,
+            $TheHiveUri,
+            $Comment
+        )
+        [string]$API_Method = "Post"
+        $API_headers = @{Authorization = "Bearer $TheHiveToken"}
+        [string]$TaskLog_Uri = "$TheHiveUri/case/task/$TaskID/log"
+        $Body = "" | select message
+        $Body.message = $Comment
+        $jsonBody = $Body | ConvertTo-Json -Depth 20 -Compress
+
+        $NewComment = Invoke-RestMethod -Uri $tasklog_Uri -Headers $API_headers -Method $API_Method -Body $jsonBody -ContentType 'application/json' -Verbose
+        return $NewComment
+    }
+
+
+    # Begin
+    $CaseData = TheHiveCaseQuery -CaseNumber $CaseNumber -TheHiveToken $HiveToken -TheHiveUri $HiveUri
+    $TaskList = TheHiveTaskListQuery -CaseID $CaseData._id -TheHiveToken $HiveToken -TheHiveUri $HiveUri
+    $Task = $TaskList | Where-Object -property title -EQ $TaskName
+    $Results = TheHiveCreateTaskLog -TaskID $Task.id -TheHiveToken $HiveToken -TheHiveUri $HiveUri -Comment $Comment
+}
