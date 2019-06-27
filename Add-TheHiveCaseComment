@@ -109,8 +109,8 @@ Function Add-TheHiveCaseComment {
 
 
     # Begin
-    $CaseData = TheHiveCaseQuery -CaseNumber $CaseNumber -TheHiveToken $HiveToken -TheHiveUri $HiveUri
-    $TaskList = TheHiveTaskListQuery -CaseID $CaseData._id -TheHiveToken $HiveToken -TheHiveUri $HiveUri
+    $CaseData = TheHiveCaseQuery -CaseNumber $CaseNumber -TheHiveToken $TheHiveToken -TheHiveUri $TheHiveUri
+    $TaskList = TheHiveTaskListQuery -CaseID $CaseData._id -TheHiveToken $TheHiveToken -TheHiveUri $TheHiveUri
     $Task = $TaskList | Where-Object -property title -EQ $TaskName
-    $Results = TheHiveCreateTaskLog -TaskID $Task.id -TheHiveToken $HiveToken -TheHiveUri $HiveUri -Comment $Comment
+    $Results = TheHiveCreateTaskLog -TaskID $Task.id -TheHiveToken $TheHiveToken -TheHiveUri $TheHiveUri -Comment $Comment
 }
